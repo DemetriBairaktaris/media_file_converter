@@ -41,13 +41,14 @@ from PySide2 import QtCore, QtGui, QtWidgets
 
 
 class JobWidget(QWidget, object):
-
-    set_done_appearence_signal = QtCore.Signal()
+    set_done_appearance_signal = QtCore.Signal()
+    set_error_appearance_signal = QtCore.Signal()
 
     def __init__(self, id, src_file, dest_file, done=False):
         super(JobWidget, self).__init__()
         self.id = id
         self.done = done
+        self.error = False
 
         self.src_file = src_file
         self.dest_file = dest_file
@@ -63,7 +64,9 @@ class JobWidget(QWidget, object):
         self.widget_layout.addWidget(QLabel(self.dest_file))
 
         self.setLayout(self.widget_layout)
-        self.set_done_appearence_signal.connect(self.set_done_appearence)
+        self.set_done_appearance_signal.connect(self.set_done_appearence)
+
+        self.set_error_appearance_signal.connect(self.set_error_appearence)
 
         self.show()
 
@@ -76,7 +79,11 @@ class JobWidget(QWidget, object):
         if self.done:
             return
         self.done = done
-        self.set_done_appearence_signal.emit()
+        self.set_done_appearance_signal.emit()
+
+    def set_error(self, error):
+        self.error = error
+        self.set_error_appearance_signal.emit()
 
     def set_done_appearence(self):
         check = QLabel()
@@ -84,6 +91,14 @@ class JobWidget(QWidget, object):
         button = create_button("Open", event=self.open)
 
         self.widget_layout.addWidget(check)
+        self.widget_layout.addWidget(button)
+
+    def set_error_appearence(self):
+        err = QLabel()
+        err.setPixmap(icons.load_icon('error.svg').pixmap(32))
+
+        button = create_button("Remove", event=lambda *args: self.hide() and self.destroy())
+        self.widget_layout.addWidget(err)
         self.widget_layout.addWidget(button)
 
 

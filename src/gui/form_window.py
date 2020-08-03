@@ -78,8 +78,16 @@ class Dialog(QDialog):
         if job.id not in self.job_widgets:
             return False
         widget: widgets.JobWidget = self.job_widgets[job.id]
-        widget.set_done(True)
+
+        success = job.success
+
+        if not success:
+            widget.set_error(True)
+        else:
+            widget.set_done(True)
+
         del self.job_widgets[job.id]
+
         return True
 
     def close_app(self, *args, **kwargs):

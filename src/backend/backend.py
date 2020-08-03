@@ -3,6 +3,7 @@ from threading import Thread
 import sys
 import os
 from time import sleep
+import tempfile
 
 
 def remove_file(path):
@@ -20,6 +21,7 @@ class CustomThread(Thread):
     def __init__(self, *args, **kwargs):
         super(CustomThread, self).__init__(*args, **kwargs)
         self.started = False
+        self.std_error = None
 
     def start(self):
         self.started = True
@@ -39,6 +41,18 @@ class Job:
 
     def __repr__(self):
         return str(self)
+
+    @property
+    def success(self) -> bool:
+        if self.thread.started:
+            is_error = False
+            if self.thread.std_error:
+                self.thread.std_error.seek(0)
+                is_error = bool(self.thread.std_error.read())
+
+            return not is_error and os.path.exists(self.dest_path)
+        else:
+            return False
 
     def is_done(self):
         return not self.thread.is_alive() and self.thread.started
@@ -68,6 +82,7 @@ class Jobs:
                     for o in self.observers:
                         if o.notify(j):
                             self.jobs.remove(j)
+
             sleep(.5)
 
     def stop_polling_for_jobs(self, wait=False):
@@ -103,8 +118,10 @@ class Jobs:
 
 
 class Conversion:
-    def run(self, runnable, *args):
-        thread = CustomThread(target=runnable, args=args)
+    executable = 'ffmpeg'
+
+    def run(self, runnable, *args, **kwargs):
+        thread = CustomThread(target=runnable, args=args, **kwargs)
         thread.start()
         return thread
 
@@ -118,16 +135,33 @@ class Conversion:
         else:
             remove_file(output_path)
 
-        executable = 'ffmpeg'
         if getattr(sys, 'freeze', False):
-            executable = os.path.join(sys._MEIPASS, executable)
+            executable = os.path.join(sys._MEIPASS, self.executable)
+        else:
+            executable = self.executable
+
         ff = ffmpy.FFmpeg(
             executable=executable,
             inputs={input_path: None},
             outputs={output_path: None})
 
         if do_multi_thread:
-            return self.run(ff.run)
+            #TODO Refactor
+            f = tempfile.NamedTemporaryFile('w+')
+            f.close()
+
+            std_error = open(f.name, 'w+')
+
+            def run_with_exception_handling(*a, **kw):
+                try:
+                    ff.run(*a, **kw)
+                except Exception as e:
+                    std_error.write(str(e))
+                    std_error.flush()
+
+            thread = self.run(run_with_exception_handling, None, None, std_error)
+            thread.std_error = std_error
+            return thread
         else:
             ff.run()
         pass
